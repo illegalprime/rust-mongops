@@ -14,8 +14,8 @@ pub enum Bson<'a> {
 //    RegExp(String, String),
 //    JavaScriptCode(String),
 //    JavaScriptCodeWithScope(String, Document),
-    I32(i32),
-    I64(i64),
+    NumberInt(i32),             // NumberInt("123")
+    NumberLong(i64),            // NumberLong("123")
     Object(Object<'a>),
 //    TimeStamp(i64),
 //    Binary(BinarySubtype, Vec<u8>),
@@ -44,21 +44,21 @@ pub trait Integer<'a> {
 impl<'a> Integer<'a> for i32 {
     #[inline]
     fn to_bson_int(self) -> Bson<'a> {
-        Bson::I32(self)
+        Bson::NumberInt(self)
     }
 }
 
 impl<'a> Integer<'a> for i64 {
     #[inline]
     fn to_bson_int(self) -> Bson<'a> {
-        Bson::I64(self)
+        Bson::NumberLong(self)
     }
 }
 
 impl<'a> Integer<'a> for u32 {
     #[inline]
     fn to_bson_int(self) -> Bson<'a> {
-        Bson::I64(self as i64)
+        Bson::NumberLong(self as i64)
     }
 }
 

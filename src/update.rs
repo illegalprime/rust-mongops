@@ -1,4 +1,8 @@
+use std::rc::Rc;
+use std::collections::LinkedList;
 use super::{Object, Upsert, Number, Integer, Bson};
+
+/* Add easy API for dot notation */
 
 #[derive(Clone)]
 pub struct Update<'a> {
@@ -21,8 +25,8 @@ impl<'a> Update<'a> {
 }
 
 pub struct UpdateField<'a> {
-    object: &'a mut Update<'a>,
-    field:  &'a str,
+    object:  &'a mut Update<'a>,
+    field:   &'a str,
 }
 
 impl<'a> UpdateField<'a> {
@@ -44,6 +48,14 @@ impl<'a> UpdateField<'a> {
         self.multiply(amount)
     }
 
+    pub fn min(self, value: Bson<'a>) -> Self {
+        self.add_modifier(MIN, value)
+    }
+
+    pub fn max(self, value: Bson<'a>) -> Self {
+        self.add_modifier(MAX, value)
+    }
+
     pub fn and<I: Integer<'a>>(self, bits: I) -> Self {
         self.bit(AND, bits.to_bson_int())
     }
@@ -56,8 +68,28 @@ impl<'a> UpdateField<'a> {
         self.bit(XOR, bits.to_bson_int())
     }
 
+    pub fn set(self, value: Bson<'a>) -> Self {
+        self.add_modifier(SET, value)
+    }
+
+    pub fn unset(self) -> Self {
+        self.add_modifier(UNSET, Bson::Str(""))
+    }
+
     pub fn rename(self, name: &'a str) -> Self {
         self.add_modifier(RENAME, Bson::Str(name))
+    }
+
+    pub fn set_on_insert(self, value: Bson<'a>) -> Self {
+        self.add_modifier(SET_ON_INSERT, value)
+    }
+
+    pub fn set_date_now(self) -> Self {
+        self.add_modifier(CURRENT_DATE, Bson::Str(DATE_TYPE))
+    }
+
+    pub fn set_timestamp_now(self) -> Self {
+        self.add_modifier(CURRENT_DATE, Bson::Str(TIMESTAMP_TYPE))
     }
 
     #[inline]
@@ -83,15 +115,17 @@ impl<'a> UpdateField<'a> {
 /*****************
  * Update Fields *
  *****************/
-const INCREMENT:     &'static str = "$inc";
-const MULTIPLY:      &'static str = "$mul";
-const RENAME:        &'static str = "$rename";
-const SET_ON_INSERT: &'static str = "$setOnInsert";
-const SET:           &'static str = "$set";
-const UNSET:         &'static str = "$unset";
-const MIN:           &'static str = "$min";
-const MAX:           &'static str = "$max";
-const CURRENT_DATE:  &'static str = "$currentDate";
+const INCREMENT:      &'static str = "$inc";
+const MULTIPLY:       &'static str = "$mul";
+const RENAME:         &'static str = "$rename";
+const SET_ON_INSERT:  &'static str = "$setOnInsert";
+const SET:            &'static str = "$set";
+const UNSET:          &'static str = "$unset";
+const MIN:            &'static str = "$min";
+const MAX:            &'static str = "$max";
+const CURRENT_DATE:   &'static str = "$currentDate";
+const DATE_TYPE:      &'static str = "{$type:\"date\"}";
+const TIMESTAMP_TYPE: &'static str = "{$type:\"timestamp\"}";
 
 /*****************
  * Update Arrays *
