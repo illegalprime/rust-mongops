@@ -1,13 +1,20 @@
 use std::collections::BTreeMap;
 
 pub type Object<'a> = BTreeMap<&'a str, Bson<'a>>;
+pub type Array<'a>  = Vec<Bson<'a>>;
+
+/*
+ * TODO: Implement ToBson for many things
+ * so you can say: push_all(vec![1, 2, 3, 4]);
+ */
+/* TODO: Make everything CoW */
 
 /// Possible BSON value types.
 #[derive(Debug, Clone)]
 pub enum Bson<'a> {
     FloatingPoint(f64),
     Str(&'a str),
-//    Array(Array),
+    Array(&'a Array<'a>),
 //    Document(Document),
     Boolean(bool),
     Null,
@@ -24,16 +31,34 @@ pub enum Bson<'a> {
 }
 
 trait Upsert<'a> {
-    fn object(&mut self, field: &'a str) -> &mut Self;
+    fn object(&mut self, field: &'a str) -> (&mut Self, bool);
+    fn each(&mut self, op: &'static str, array: &'a str) -> &mut Self;
 }
 
 impl<'a> Upsert<'a> for Object<'a> {
     #[inline]
-    fn object(&mut self, field: &'a str) -> &mut Self {
-        match self.entry(field).or_insert(Bson::Object(Object::new())) {
-            &mut Bson::Object(ref mut o) => o,
+    fn object(&mut self, field: &'a str) -> (&mut Self, bool) {
+        let mut new = false;
+        match self.entry(field).or_insert_with(|| {
+            new = true;
+            Bson::Object(Object::new())
+        }) {
+            &mut Bson::Object(ref mut o) => (o, new),
             _ => unreachable!(),
         }
+    }
+
+    #[inline]
+    fn each(&mut self, op: &'static str, array: &'a str) -> &mut Self {
+        let (push, changed) = self.object(op);
+        if !changed {
+            match push.get(array) {
+                Some(& Bson::Object(_)) | None => (),
+                Some(_)                        => { push.remove(array); },
+            };
+        }
+        let (each, _) = push.object(array);
+        each
     }
 }
 
@@ -82,7 +107,7 @@ impl<'a, I: Integer<'a>> Number<'a> for I {
 }
 
 mod update;
-pub use update::{Update, UpdateField};
+pub use update::{Update, UpdateField, UpdateArray};
 
 #[test]
 fn it_works() {
