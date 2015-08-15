@@ -2,7 +2,8 @@ use super::{Upsert, Number, Integer};
 use super::{Bson, Array, Object};
 use std::borrow::Cow;
 
-/* Add easy API for dot notation */
+/* TODO: Add easy API for dot notation */
+/* TODO: Make every large argument be a CoWs (take Vec or &Vec) */
 
 #[derive(Clone)]
 pub struct Update<'a>(Object<'a>);
