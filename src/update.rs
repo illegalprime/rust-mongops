@@ -25,6 +25,16 @@ impl<'a> Update<'a> {
             array:  array,
         }
     }
+
+    pub fn isolate(mut self) -> Self {
+        self.0.insert(ISOLATED, 1.to_bson_int());
+        self
+    }
+
+    pub fn no_isolate(mut self) -> Self {
+        self.0.remove(ISOLATED);
+        self
+    }
 }
 
 pub struct UpdateField<'a> {
