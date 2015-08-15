@@ -1,5 +1,6 @@
 use super::{Upsert, Number, Integer};
 use super::{Bson, Array, Object};
+use std::borrow::Cow;
 
 /* Add easy API for dot notation */
 
@@ -97,7 +98,7 @@ impl<'a> UpdateField<'a> {
     #[inline]
     fn add_modifier(mut self, category: &'static str, value: Bson<'a>) -> Self {
         {
-            let (group, _) = self.root.object(category);
+            let group = self.root.object(category);
             group.insert(self.field, value);
         }
         self
@@ -106,8 +107,8 @@ impl<'a> UpdateField<'a> {
     #[inline]
     fn bit(mut self, op: &'static str, bits: Bson<'a>) -> Self {
         {
-	        let (bits_update, _) = self.root.object(BIT);
-	        let (field_ops, _) = bits_update.object(self.field);
+	        let bits_update = self.root.object(BIT);
+	        let field_ops = bits_update.object(self.field);
 	        field_ops.insert(op, bits);
         }
         self
@@ -134,16 +135,16 @@ impl<'a> UpdateArray<'a> {
 
     pub fn push_all(self, values: &'a Array<'a>) -> Self {
         {
-	        let each = self.root.each(PUSH, self.array);
-	        each.insert(EACH, Bson::Array(values));
+	        let array = self.root.deep_object(PUSH, self.array);
+	        array.insert(EACH, Bson::Array(Cow::Borrowed(values)));
         }
         self
     }
-/*
 
     pub fn slice(self, max: u32) -> Self {
         {
-            let array = self.create_each(PUSH, None);
+            let array = self.root.deep_object(PUSH, self.array);
+            array.entry(EACH).or_insert_with(|| Bson::Array(Cow::Owned(Vec::new())));
             array.insert(SLICE, max.to_bson_int());
         }
         self
@@ -167,24 +168,24 @@ impl<'a> UpdateArray<'a> {
 
     fn sort_array(mut self, direction: i32, spec: Option<&'a str>) -> Self {
         {
-	        let array = self.create_each(PUSH, None);
-	        array.insert(SORT, if let Some(field) = spec {
-	            let mut sort = Object::new();
-	            sort.insert(field, direction.to_bson_int());
-	            Bson::Object(sort)
-	        } else {
-	            direction.to_bson_int()
-	        });
+	        let array = self.root.deep_object(PUSH, self.array);
+            array.entry(EACH).or_insert_with(|| Bson::Array(Cow::Owned(Vec::new())));
+            if let Some(field) = spec {
+                let sort = array.object(SORT);
+                sort.insert(field, direction.to_bson_int());
+            } else {
+                array.insert(SORT, direction.to_bson_int());
+            }
 	    }
         self
     }
-*/
+
     pub fn pull(self, value: Bson<'a>) -> Self {
         self.add_modifier(PULL, value)
     }
 
     pub fn pull_all(self, values: &'a Array<'a>) -> Self {
-        self.add_modifier(PULL_ALL, Bson::Array(values))
+        self.add_modifier(PULL_ALL, Bson::Array(Cow::Borrowed(values)))
     }
 
     /* TODO: Requires Query ops pub fn pull_if(self, condition: ) */
@@ -203,64 +204,23 @@ impl<'a> UpdateArray<'a> {
     pub fn add_to_set(self, value: Bson<'a>) -> Self {
         self.add_modifier(ADD_TO_SET, value)
     }
-/*
+
     pub fn add_all_to_set(self, values: &'a Array<'a>) -> Self {
-        self.create_each(ADD_TO_SET, Some(values));
+        {
+            let array = self.root.deep_object(ADD_TO_SET, self.array);
+            array.insert(EACH, Bson::Array(Cow::Borrowed(values)));
+        }
         self
     }
-*/
+
     #[inline]
     fn add_modifier(mut self, category: &'static str, value: Bson<'a>) -> Self {
         {
-            let (group, _) = self.root.object(category);
+            let group = self.root.object(category);
             group.insert(self.array, value);
         }
         self
     }
-/*
-    fn clear_each(&mut self) -> &mut Object {
-        let push = self.object.map.object(op);
-        // If the array is already set to push one thing (no $each) remove it.
-        match push.get(self.array) {
-            Some(& Bson::Object(_)) | None => (),
-            Some(_)                        => { push.remove(self.array); },
-        };
-        let array = push.object(self.array);
-        array
-    }
-
-    fn empty_each(&mut self, op: &'static str) -> &mut Object<'a> {
-        self.clear_each();
-        array.entry(EACH).or_insert_with(|| {
-            Bson::Array(&vec![])
-        });
-        array
-    }
-
-    fn fill_each(mut self, op: &'static str, values: &'a Array<'a>) -> Self {
-        self.empty_each(op).insert(self.array)
-    }
-
-    fn create_each(mut self, op: &'static str, values: Option<&'a Array<'a>>, extra: Option<Bson<'a>>) -> Self {
-        // Create a field for $push in the request if none exist
-        let push = self.object.map.object(op);
-        // If the array is already set to push one thing (no $each) remove it.
-        match push.get(self.array) {
-            Some(& Bson::Object(_)) | None => (),
-            Some(_)                        => { push.remove(self.array); },
-        };
-        let array = push.object(self.array);
-        if let Some(arr) = values {
-            array.insert(EACH, Bson::Array(arr));
-        } else {
-            array.entry(EACH).or_insert_with(|| {
-                Bson::Array(&vec![])
-            });
-        }
-        if let Some(mods) = extra {
-            array.
-        }
-    }*/
 }
 
 /*****************
@@ -306,4 +266,3 @@ const OR:  &'static str = "or";
  * Isolation *
  *************/
 const ISOLATED: &'static str = "$isolated";
-

@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
+use std::borrow::Cow;
 
 pub type Object<'a> = BTreeMap<&'a str, Bson<'a>>;
 pub type Array<'a>  = Vec<Bson<'a>>;
@@ -14,7 +16,7 @@ pub type Array<'a>  = Vec<Bson<'a>>;
 pub enum Bson<'a> {
     FloatingPoint(f64),
     Str(&'a str),
-    Array(&'a Array<'a>),
+    Array(Cow<'a, Array<'a>>),
 //    Document(Document),
     Boolean(bool),
     Null,
@@ -30,35 +32,40 @@ pub enum Bson<'a> {
 //    UtcDatetime(DateTime<UTC>),
 }
 
+impl<'a> Bson<'a> {
+    fn as_mut_object(&mut self) -> Option<&mut Object<'a>> {
+        match self {
+            &mut Bson::Object(ref mut o) => Some(o),
+            _ => None,
+        }
+    }
+}
+
 trait Upsert<'a> {
-    fn object(&mut self, field: &'a str) -> (&mut Self, bool);
-    fn each(&mut self, op: &'static str, array: &'a str) -> &mut Self;
+    fn object(&mut self, field: &'a str) -> &mut Self;
+    fn deep_object(&mut self, op: &'static str, array: &'a str) -> &mut Self;
 }
 
 impl<'a> Upsert<'a> for Object<'a> {
     #[inline]
-    fn object(&mut self, field: &'a str) -> (&mut Self, bool) {
-        let mut new = false;
-        match self.entry(field).or_insert_with(|| {
-            new = true;
-            Bson::Object(Object::new())
-        }) {
-            &mut Bson::Object(ref mut o) => (o, new),
-            _ => unreachable!(),
-        }
+    fn object(&mut self, field: &'a str) -> &mut Self {
+        match self.entry(field) {
+            Entry::Vacant(v) => v.insert(Bson::Object(Object::new())),
+            Entry::Occupied(o) => {
+                match o.into_mut() {
+                    obj @ &mut Bson::Object(_) => obj,
+                    other @ _ => {
+                        *other = Bson::Object(Object::new());
+                        other
+                    },
+                }
+            }
+        }.as_mut_object().unwrap()
     }
 
     #[inline]
-    fn each(&mut self, op: &'static str, array: &'a str) -> &mut Self {
-        let (push, changed) = self.object(op);
-        if !changed {
-            match push.get(array) {
-                Some(& Bson::Object(_)) | None => (),
-                Some(_)                        => { push.remove(array); },
-            };
-        }
-        let (each, _) = push.object(array);
-        each
+    fn deep_object(&mut self, op: &'static str, array: &'a str) -> &mut Self {
+        self.object(op).object(array)
     }
 }
 
