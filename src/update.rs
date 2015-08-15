@@ -133,12 +133,22 @@ impl<'a> UpdateArray<'a> {
         self.add_modifier(PUSH, value)
     }
 
+    #[inline]
+    pub fn push_at(self, value: Bson<'a>, position: u32) -> Self {
+        self.push_pos_cow(Cow::Owned(vec![value]), position)
+    }
+
     pub fn push_all(self, values: &'a Array<'a>) -> Self {
         {
 	        let array = self.root.deep_object(PUSH, self.array);
 	        array.insert(EACH, Bson::Array(Cow::Borrowed(values)));
         }
         self
+    }
+
+    #[inline]
+    pub fn push_all_at(self, values: &'a Array<'a>, position: u32) -> Self {
+        self.push_pos_cow(Cow::Borrowed(values), position)
     }
 
     pub fn slice(self, max: u32) -> Self {
@@ -218,6 +228,15 @@ impl<'a> UpdateArray<'a> {
         {
             let group = self.root.object(category);
             group.insert(self.array, value);
+        }
+        self
+    }
+
+    fn push_pos_cow(self, values: Cow<'a, Array<'a>>, position: u32) -> Self {
+        {
+            let array = self.root.deep_object(PUSH, self.array);
+            array.insert(EACH, Bson::Array(values));
+            array.insert(POSITION, position.to_bson_int());
         }
         self
     }
