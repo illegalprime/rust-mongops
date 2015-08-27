@@ -39,8 +39,8 @@ impl<'a> Update<'a> {
 }
 
 pub struct UpdateField<'a> {
-    root:    &'a mut Object<'a>,
-    field:   &'a str,
+    root:  &'a mut Object<'a>,
+    field: &'a str,
 }
 
 impl<'a> UpdateField<'a> {
@@ -110,7 +110,7 @@ impl<'a> UpdateField<'a> {
     fn add_modifier(mut self, category: &'static str, value: Bson<'a>) -> Self {
         {
             let group = self.root.object(category);
-            group.insert(self.field, value);
+            group.insert(&self.field, value);
         }
         self
     }
@@ -119,7 +119,7 @@ impl<'a> UpdateField<'a> {
     fn bit(mut self, op: &'static str, bits: Bson<'a>) -> Self {
         {
 	        let bits_update = self.root.object(BIT);
-	        let field_ops = bits_update.object(self.field);
+	        let field_ops = bits_update.object(&self.field);
 	        field_ops.insert(op, bits);
         }
         self
@@ -127,8 +127,8 @@ impl<'a> UpdateField<'a> {
 }
 
 pub struct UpdateArray<'a> {
-    root:    &'a mut Object<'a>,
-    array:   &'a str,
+    root:  &'a mut Object<'a>,
+    array: &'a str,
 }
 
 impl<'a> UpdateArray<'a> {
@@ -151,7 +151,7 @@ impl<'a> UpdateArray<'a> {
 
     pub fn push_all(self, values: &'a Array<'a>) -> Self {
         {
-	        let array = self.root.deep_object(PUSH, self.array);
+	        let array = self.root.deep_object(PUSH, &self.array);
 	        array.insert(EACH, Bson::Array(Cow::Borrowed(values)));
         }
         self
@@ -164,7 +164,7 @@ impl<'a> UpdateArray<'a> {
 
     pub fn slice(self, max: u32) -> Self {
         {
-            let array = self.root.deep_object(PUSH, self.array);
+            let array = self.root.deep_object(PUSH, &self.array);
             array.entry(EACH).or_insert_with(|| Bson::Array(Cow::Owned(Vec::new())));
             array.insert(SLICE, max.to_bson_int());
         }
@@ -189,7 +189,7 @@ impl<'a> UpdateArray<'a> {
 
     fn sort_array(mut self, direction: i32, spec: Option<&'a str>) -> Self {
         {
-	        let array = self.root.deep_object(PUSH, self.array);
+	        let array = self.root.deep_object(PUSH, &self.array);
             array.entry(EACH).or_insert_with(|| Bson::Array(Cow::Owned(Vec::new())));
             if let Some(field) = spec {
                 let sort = array.object(SORT);
@@ -228,7 +228,7 @@ impl<'a> UpdateArray<'a> {
 
     pub fn add_all_to_set(self, values: &'a Array<'a>) -> Self {
         {
-            let array = self.root.deep_object(ADD_TO_SET, self.array);
+            let array = self.root.deep_object(ADD_TO_SET, &self.array);
             array.insert(EACH, Bson::Array(Cow::Borrowed(values)));
         }
         self
@@ -238,14 +238,14 @@ impl<'a> UpdateArray<'a> {
     fn add_modifier(mut self, category: &'static str, value: Bson<'a>) -> Self {
         {
             let group = self.root.object(category);
-            group.insert(self.array, value);
+            group.insert(&self.array, value);
         }
         self
     }
 
     fn push_pos_cow(self, values: Cow<'a, Array<'a>>, position: u32) -> Self {
         {
-            let array = self.root.deep_object(PUSH, self.array);
+            let array = self.root.deep_object(PUSH, &self.array);
             array.insert(EACH, Bson::Array(values));
             array.insert(POSITION, position.to_bson_int());
         }
@@ -272,7 +272,7 @@ const TIMESTAMP_TYPE: &'static str = "{$type:\"timestamp\"}";
  * Update Arrays *
  *****************/
 /* Operators */
-const FIRST:      &'static str = "$";
+/* TODO: Create easy semantics for . const FIRST:      &'static str = "$"; */
 const ADD_TO_SET: &'static str = "$addToSet";
 const POP:        &'static str = "$pop";
 const PULL_ALL:   &'static str = "$pullAll";
