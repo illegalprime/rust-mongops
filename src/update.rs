@@ -1,5 +1,5 @@
 use super::json::{Json, Array, Object, Upsert, Number, Integer};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Debug, Formatter};
 use std::fmt::Error as FmtError;
 use std::borrow::Cow;
 
@@ -255,9 +255,9 @@ impl<'a> UpdateArray<'a> {
 }
 
 impl<'a> Display for Update<'a> {
+    #[inline]
     fn fmt(&self, format: &mut Formatter) -> Result<(), FmtError> {
-        /* TODO: Universal method call syntax */
-        format.write_fmt(format_args!("{:?}", self.0))
+        Debug::fmt(&self.0, format)
     }
 }
 
