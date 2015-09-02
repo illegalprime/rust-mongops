@@ -1,5 +1,6 @@
-use super::{Upsert, Number, Integer};
-use super::{Bson, Array, Object};
+use super::json::{Json, Array, Object, Upsert, Number, Integer};
+use std::fmt::{Display, Formatter};
+use std::fmt::Error as FmtError;
 use std::borrow::Cow;
 
 /* TODO: Add easy API for dot notation */
@@ -15,20 +16,20 @@ impl<'a> Update<'a> {
 
     pub fn field(&'a mut self, field: &'a str) -> UpdateField {
         UpdateField {
-            root:   &mut self.0,
-            field:  field,
+            root:  &mut self.0,
+            field: field,
         }
     }
 
     pub fn array(&'a mut self, array: &'a str) -> UpdateArray {
         UpdateArray {
-            root:   &mut self.0,
-            array:  array,
+            root:  &mut self.0,
+            array: array,
         }
     }
 
     pub fn isolate(mut self) -> Self {
-        self.0.insert(ISOLATED, 1.to_bson_int());
+        self.0.insert(ISOLATED, 1.to_json_int());
         self
     }
 
@@ -45,7 +46,7 @@ pub struct UpdateField<'a> {
 
 impl<'a> UpdateField<'a> {
     pub fn increment<N: Number<'a>>(self, amount: N) -> Self {
-        self.add_modifier(INCREMENT, amount.to_bson_num())
+        self.add_modifier(INCREMENT, amount.to_json_num())
     }
 
     #[inline]
@@ -54,7 +55,7 @@ impl<'a> UpdateField<'a> {
     }
 
     pub fn multiply<N: Number<'a>>(self, amount: N) -> Self {
-        self.add_modifier(MULTIPLY, amount.to_bson_num())
+        self.add_modifier(MULTIPLY, amount.to_json_num())
     }
 
     #[inline]
@@ -62,52 +63,52 @@ impl<'a> UpdateField<'a> {
         self.multiply(amount)
     }
 
-    pub fn min(self, value: Bson<'a>) -> Self {
+    pub fn min(self, value: Json<'a>) -> Self {
         self.add_modifier(MIN, value)
     }
 
-    pub fn max(self, value: Bson<'a>) -> Self {
+    pub fn max(self, value: Json<'a>) -> Self {
         self.add_modifier(MAX, value)
     }
 
     pub fn and<I: Integer<'a>>(self, bits: I) -> Self {
-        self.bit(AND, bits.to_bson_int())
+        self.bit(AND, bits.to_json_int())
     }
 
     pub fn or<I: Integer<'a>>(self, bits: I) -> Self {
-        self.bit(OR, bits.to_bson_int())
+        self.bit(OR, bits.to_json_int())
     }
 
     pub fn xor<I: Integer<'a>>(self, bits: I) -> Self {
-        self.bit(XOR, bits.to_bson_int())
+        self.bit(XOR, bits.to_json_int())
     }
 
-    pub fn set(self, value: Bson<'a>) -> Self {
+    pub fn set(self, value: Json<'a>) -> Self {
         self.add_modifier(SET, value)
     }
 
     pub fn unset(self) -> Self {
-        self.add_modifier(UNSET, Bson::Str(""))
+        self.add_modifier(UNSET, Json::Str(""))
     }
 
     pub fn rename(self, name: &'a str) -> Self {
-        self.add_modifier(RENAME, Bson::Str(name))
+        self.add_modifier(RENAME, Json::Str(name))
     }
 
-    pub fn set_on_insert(self, value: Bson<'a>) -> Self {
+    pub fn set_on_insert(self, value: Json<'a>) -> Self {
         self.add_modifier(SET_ON_INSERT, value)
     }
 
     pub fn set_date_now(self) -> Self {
-        self.add_modifier(CURRENT_DATE, Bson::Str(DATE_TYPE))
+        self.add_modifier(CURRENT_DATE, Json::Str(DATE_TYPE))
     }
 
     pub fn set_timestamp_now(self) -> Self {
-        self.add_modifier(CURRENT_DATE, Bson::Str(TIMESTAMP_TYPE))
+        self.add_modifier(CURRENT_DATE, Json::Str(TIMESTAMP_TYPE))
     }
 
     #[inline]
-    fn add_modifier(mut self, category: &'static str, value: Bson<'a>) -> Self {
+    fn add_modifier(mut self, category: &'static str, value: Json<'a>) -> Self {
         {
             let group = self.root.object(category);
             group.insert(&self.field, value);
@@ -116,7 +117,7 @@ impl<'a> UpdateField<'a> {
     }
 
     #[inline]
-    fn bit(mut self, op: &'static str, bits: Bson<'a>) -> Self {
+    fn bit(mut self, op: &'static str, bits: Json<'a>) -> Self {
         {
 	        let bits_update = self.root.object(BIT);
 	        let field_ops = bits_update.object(&self.field);
@@ -140,19 +141,19 @@ impl<'a> UpdateArray<'a> {
      */
     /* TODO: Refactor for less code bloat */
 
-    pub fn push(self, value: Bson<'a>) -> Self {
+    pub fn push(self, value: Json<'a>) -> Self {
         self.add_modifier(PUSH, value)
     }
 
     #[inline]
-    pub fn push_at(self, value: Bson<'a>, position: u32) -> Self {
+    pub fn push_at(self, value: Json<'a>, position: u32) -> Self {
         self.push_pos_cow(Cow::Owned(vec![value]), position)
     }
 
     pub fn push_all(self, values: &'a Array<'a>) -> Self {
         {
 	        let array = self.root.deep_object(PUSH, &self.array);
-	        array.insert(EACH, Bson::Array(Cow::Borrowed(values)));
+	        array.insert(EACH, Json::Array(Cow::Borrowed(values)));
         }
         self
     }
@@ -165,8 +166,8 @@ impl<'a> UpdateArray<'a> {
     pub fn slice(self, max: u32) -> Self {
         {
             let array = self.root.deep_object(PUSH, &self.array);
-            array.entry(EACH).or_insert_with(|| Bson::Array(Cow::Owned(Vec::new())));
-            array.insert(SLICE, max.to_bson_int());
+            array.entry(EACH).or_insert_with(|| Json::Array(Cow::Owned(Vec::new())));
+            array.insert(SLICE, max.to_json_int());
         }
         self
     }
@@ -190,23 +191,23 @@ impl<'a> UpdateArray<'a> {
     fn sort_array(mut self, direction: i32, spec: Option<&'a str>) -> Self {
         {
 	        let array = self.root.deep_object(PUSH, &self.array);
-            array.entry(EACH).or_insert_with(|| Bson::Array(Cow::Owned(Vec::new())));
+            array.entry(EACH).or_insert_with(|| Json::Array(Cow::Owned(Vec::new())));
             if let Some(field) = spec {
                 let sort = array.object(SORT);
-                sort.insert(field, direction.to_bson_int());
+                sort.insert(field, direction.to_json_int());
             } else {
-                array.insert(SORT, direction.to_bson_int());
+                array.insert(SORT, direction.to_json_int());
             }
 	    }
         self
     }
 
-    pub fn pull(self, value: Bson<'a>) -> Self {
+    pub fn pull(self, value: Json<'a>) -> Self {
         self.add_modifier(PULL, value)
     }
 
     pub fn pull_all(self, values: &'a Array<'a>) -> Self {
-        self.add_modifier(PULL_ALL, Bson::Array(Cow::Borrowed(values)))
+        self.add_modifier(PULL_ALL, Json::Array(Cow::Borrowed(values)))
     }
 
     /* TODO: Requires Query ops pub fn pull_if(self, condition: ) */
@@ -214,28 +215,28 @@ impl<'a> UpdateArray<'a> {
     pub fn pop_front(self) -> Self {
         // TODO: Check if we should be using FloatingPoint()
         // to avoid NumberInt("-1");
-        self.add_modifier(POP, (-1).to_bson_int())
+        self.add_modifier(POP, (-1).to_json_int())
     }
 
     pub fn pop_back(self) -> Self {
         // TODO: Same as above
-        self.add_modifier(POP, 1.to_bson_int())
+        self.add_modifier(POP, 1.to_json_int())
     }
 
-    pub fn add_to_set(self, value: Bson<'a>) -> Self {
+    pub fn add_to_set(self, value: Json<'a>) -> Self {
         self.add_modifier(ADD_TO_SET, value)
     }
 
     pub fn add_all_to_set(self, values: &'a Array<'a>) -> Self {
         {
             let array = self.root.deep_object(ADD_TO_SET, &self.array);
-            array.insert(EACH, Bson::Array(Cow::Borrowed(values)));
+            array.insert(EACH, Json::Array(Cow::Borrowed(values)));
         }
         self
     }
 
     #[inline]
-    fn add_modifier(mut self, category: &'static str, value: Bson<'a>) -> Self {
+    fn add_modifier(mut self, category: &'static str, value: Json<'a>) -> Self {
         {
             let group = self.root.object(category);
             group.insert(&self.array, value);
@@ -246,10 +247,17 @@ impl<'a> UpdateArray<'a> {
     fn push_pos_cow(self, values: Cow<'a, Array<'a>>, position: u32) -> Self {
         {
             let array = self.root.deep_object(PUSH, &self.array);
-            array.insert(EACH, Bson::Array(values));
-            array.insert(POSITION, position.to_bson_int());
+            array.insert(EACH, Json::Array(values));
+            array.insert(POSITION, position.to_json_int());
         }
         self
+    }
+}
+
+impl<'a> Display for Update<'a> {
+    fn fmt(&self, format: &mut Formatter) -> Result<(), FmtError> {
+        /* TODO: Universal method call syntax */
+        format.write_fmt(format_args!("{:?}", self.0))
     }
 }
 

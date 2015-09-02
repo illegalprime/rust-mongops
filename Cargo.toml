@@ -4,5 +4,3 @@ version = "0.0.1"
 description = "A Rust library to build MongoDB Operators, still under development; see the repo for updates."
 repository = "https://github.com/illegalprime/rust-mongops"
 authors = ["Michael Eden <themichaeleden@gmail.com>"]
-
-
